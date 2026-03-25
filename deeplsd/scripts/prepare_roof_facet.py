@@ -2,8 +2,8 @@
 prepare_roof_facet.py
 
 Prepares the roof facet dataset for DeepLSD training:
-  1. Reads all images from img_folder
-  2. Splits into train/val and copies into DATA_PATH/roof_facet/train|val/
+  1. Reads all images from img_folder (uses them in-place, no copying)
+  2. Splits into train/val and creates symlinks in DATA_PATH/roof_facet/train|val/
   3. Creates GT output dirs: DATA_PATH/export_datasets/roof_facet_ha/train|val/
   4. Writes image_list_train.txt and image_list_val.txt for homography_adaptation_df
 
@@ -33,8 +33,8 @@ Usage:
 """
 
 import argparse
+import os
 import random
-import shutil
 from pathlib import Path
 
 
@@ -63,8 +63,8 @@ def prepare(img_folder, data_path, val_split=0.05, seed=42):
         for img_path in imgs:
             dst = out_dir / img_path.name
             if not dst.exists():
-                shutil.copy2(str(img_path), str(dst))
-        print(f'  Copied {len(imgs)} images to {out_dir}')
+                os.symlink(str(img_path.resolve()), str(dst))
+        print(f'  Symlinked {len(imgs)} images into {out_dir}')
 
     for split in ['train', 'val']:
         gt_dir = data_path / 'export_datasets' / 'roof_facet_ha' / split
@@ -74,8 +74,7 @@ def prepare(img_folder, data_path, val_split=0.05, seed=42):
         list_path = data_path / f'image_list_{split}.txt'
         with open(list_path, 'w') as f:
             for img_path in imgs:
-                dst = data_path / 'roof_facet' / split / img_path.name
-                f.write(str(dst.resolve()) + '\n')
+                f.write(str(img_path.resolve()) + '\n')
         print(f'  Wrote {list_path}')
 
     print()
