@@ -1,16 +1,12 @@
 """
 Roof Facet dataset for DeepLSD fine-tuning.
-Mirrors wireframe_ha.py but points to your aerial roof imagery.
 
-Expected DATA_PATH structure (set DATA_PATH in deeplsd/settings.py):
-  DATA_PATH/
-    roof_facet/
-      train/    <- .jpg or .png images
-      val/      <- .jpg or .png images
-    export_datasets/
-      roof_facet_ha/
-        train/  <- .hdf5 GT files from homography_adaptation_df script
-        val/    <- .hdf5 GT files
+Data layout:
+  image_dir (external):  /mnt/harddrive/data/dataset/sam2_data/train/images/
+  gt_dir (DATA_PATH):    gt_rooflines/hdf5/   <- .hdf5 GT from convert_gt_lines_to_hdf5
+
+Images and HDF5 are matched by filename stem.
+Train/val split is done by val_size (first N sorted = val, rest = train).
 """
 
 from pathlib import Path
@@ -30,9 +26,9 @@ from ..settings import DATA_PATH
 
 class RoofFacetHA(BaseDataset, torch.utils.data.Dataset):
     default_conf = {
-        'dataset_dir': 'roof_facet',
-        'gt_dir': 'export_datasets/roof_facet_ha',
-        'val_size': 200,
+        'image_dir': '/mnt/harddrive/data/dataset/sam2_data/train/images',
+        'gt_dir': 'gt_rooflines/hdf5',
+        'val_size': 500,
         'resize': [512, 512],
         'photometric_augmentation': {
             'enable': True,
@@ -117,24 +113,35 @@ class _Dataset(torch.utils.data.Dataset):
         self.conf, self.split = conf, split
         torch.manual_seed(conf.seed)
         np.random.seed(conf.seed)
-        folder = 'val' if split == 'val' else 'train'
 
-        img_dir = Path(DATA_PATH, conf.dataset_dir, folder)
-        self.images = [p for p in img_dir.iterdir()
-                       if p.suffix.lower() in ('.jpg', '.jpeg', '.png')]
-        if len(self.images) == 0:
-            raise ValueError(f'No images found in {img_dir}')
-        self.images.sort()
-        logging.info(f'[RoofFacetHA] {split}: {len(self.images)} images')
+        # Build matched pairs: image <-> hdf5 by filename stem
+        img_dir = Path(conf.image_dir)
+        gt_dir = Path(DATA_PATH, conf.gt_dir)
 
-        gt_dir = Path(DATA_PATH, conf.gt_dir, folder)
-        self.gt = [p for p in gt_dir.iterdir() if p.suffix == '.hdf5']
-        if len(self.gt) == 0:
-            raise ValueError(f'No GT hdf5 files found in {gt_dir}')
-        self.gt.sort()
-        logging.info(f'[RoofFacetHA] {split}: {len(self.gt)} GT files')
-        assert len(self.images) == len(self.gt), \
-            f'Mismatch: {len(self.images)} images vs {len(self.gt)} GT files'
+        gt_stems = {p.stem: p for p in gt_dir.iterdir() if p.suffix == '.hdf5'}
+        pairs = []
+        for img_path in sorted(img_dir.iterdir()):
+            if img_path.suffix.lower() not in ('.jpg', '.jpeg', '.png'):
+                continue
+            if img_path.stem in gt_stems:
+                pairs.append((img_path, gt_stems[img_path.stem]))
+
+        if len(pairs) == 0:
+            raise ValueError(
+                f'No matched image-GT pairs found.\n'
+                f'  image_dir: {img_dir}\n  gt_dir: {gt_dir}')
+
+        logging.info(f'[RoofFacetHA] Found {len(pairs)} matched image-GT pairs')
+
+        # Split: first val_size = val, rest = train
+        if split == 'val':
+            pairs = pairs[:conf.val_size]
+        elif split == 'train':
+            pairs = pairs[conf.val_size:]
+
+        self.images = [p[0] for p in pairs]
+        self.gt = [p[1] for p in pairs]
+        logging.info(f'[RoofFacetHA] {split}: {len(self.images)} samples')
 
     def get_dataset(self, split):
         return self

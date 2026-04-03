@@ -1,8 +1,8 @@
 data:
     name: roof_facet_ha
-    dataset_dir: roof_facet
-    gt_dir: export_datasets/roof_facet_ha
-    val_size: 200
+    image_dir: /mnt/harddrive/data/dataset/sam2_data/train/images
+    gt_dir: gt_rooflines/hdf5
+    val_size: 500
     batch_size: 4
     resize: [512, 512]
     num_workers: 4
