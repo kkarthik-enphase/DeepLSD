@@ -229,8 +229,8 @@ def process_generate(image_dir, payload_dir, output_dir, visualize=False, max_sa
     print(f"Saved mapping to {mapping_path}")
 
     # Create output subdirs
-    lines_dir = Path(output_dir) / "line_segments"
-    os.makedirs(lines_dir, exist_ok=True)
+    gt_dir = Path(output_dir) / "gt_lines"
+    os.makedirs(gt_dir, exist_ok=True)
 
     if visualize:
         vis_dir = Path(output_dir) / "visualizations"
@@ -256,27 +256,19 @@ def process_generate(image_dir, payload_dir, output_dir, visualize=False, max_sa
                 stats["empty"] += 1
                 continue
 
-            # Debug: print coordinate ranges for first few
-            if stats["total"] <= 5:
-                print(f"  {stem}: imageSize={img_size}, orig_size={orig_size}, "
-                      f"coord range x=[{segments[:,0].min():.0f}-{segments[:,0].max():.0f}], "
-                      f"y=[{segments[:,1].min():.0f}-{segments[:,1].max():.0f}]")
-
             # Scale from imageSize space to 1024x1024
             scaled_segments = scale_segments_to_target(
                 segments, img_size, orig_size, 1024)
 
-            # Save line segments as .npy (Nx4 array: x1, y1, x2, y2)
-            np.save(str(lines_dir / f"{stem}.npy"), scaled_segments.astype(np.float32))
-
-            # Save edge types
-            types_path = lines_dir / f"{stem}_types.json"
-            with open(types_path, 'w') as f:
-                json.dump(edge_types, f)
-
-            # Render binary line map
-            line_map = render_line_map(scaled_segments)
-            cv2.imwrite(str(lines_dir / f"{stem}_linemap.png"), line_map)
+            # Save single JSON per image
+            gt_json = {
+                "image": img_name,
+                "lines": scaled_segments.tolist(),
+                "edge_types": edge_types,
+                "num_lines": len(scaled_segments),
+            }
+            with open(gt_dir / f"{stem}.json", 'w') as f:
+                json.dump(gt_json, f)
 
             stats["with_lines"] += 1
 
@@ -298,24 +290,19 @@ def process_generate(image_dir, payload_dir, output_dir, visualize=False, max_sa
 
 def process_visualize(image_dir, output_dir, num_samples=20):
     """Visualize a few samples from already generated GT."""
-    lines_dir = Path(output_dir) / "line_segments"
+    gt_dir = Path(output_dir) / "gt_lines"
     vis_dir = Path(output_dir) / "visualizations_sample"
     os.makedirs(vis_dir, exist_ok=True)
 
-    npy_files = sorted(lines_dir.glob("*.npy"))[:num_samples]
-    print(f"Visualizing {len(npy_files)} samples...")
+    json_files = sorted(gt_dir.glob("*.json"))[:num_samples]
+    print(f"Visualizing {len(json_files)} samples...")
 
-    for npy_path in npy_files:
-        stem = npy_path.stem
-        segments = np.load(str(npy_path))
-
-        # Load edge types if available
-        types_path = lines_dir / f"{stem}_types.json"
-        if types_path.exists():
-            with open(types_path) as f:
-                edge_types = json.load(f)
-        else:
-            edge_types = ["unknown"] * len(segments)
+    for json_path in json_files:
+        stem = json_path.stem
+        with open(json_path) as f:
+            data = json.load(f)
+        segments = np.array(data["lines"])
+        edge_types = data.get("edge_types", ["unknown"] * len(segments))
 
         # Load image
         img_path = Path(image_dir) / f"{stem}.jpg"
