@@ -152,14 +152,21 @@ class _Dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         path = self.images[idx]
         img = cv2.imread(str(path), 0)
-        img_size = np.array(img.shape)
-        h, w = img_size
 
+        # Load GT and infer its spatial size from the flattened df
         with h5py.File(str(self.gt[idx]), 'r') as f:
-            gt_df = np.array(f['df']).reshape(img_size)
-            gt_angle = np.mod(np.array(f['line_level']).reshape(img_size), np.pi)
+            df_flat = np.array(f['df'])
+            gt_size = int(np.sqrt(len(df_flat)))
+            gt_shape = np.array([gt_size, gt_size])
+            h, w = gt_shape
+            gt_df = df_flat.reshape(gt_shape)
+            gt_angle = np.mod(np.array(f['line_level']).reshape(gt_shape), np.pi)
             gt_closest = np.array(f['closest']).reshape(h, w, 2)[:, :, [1, 0]]
-            bg_mask = np.array(f['bg_mask']).reshape(img_size)
+            bg_mask = np.array(f['bg_mask']).reshape(gt_shape)
+
+        # Resize image to match GT size
+        img = cv2.resize(img, (w, h), interpolation=cv2.INTER_LINEAR)
+        img_size = gt_shape
 
         pix_loc = np.stack(np.meshgrid(np.arange(h), np.arange(w),
                                        indexing='ij'), axis=-1)
