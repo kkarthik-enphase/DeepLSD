@@ -13,8 +13,14 @@ from ..geometry.line_utils import (merge_lines, get_line_orientation,
                                    filter_outlier_lines)
 from ..geometry.homography_adaptation import torch_homography_adaptation
 from ..utils.tensor import preprocess_angle
-from pytlsd import lsd
-from line_refinement import line_optim
+try:
+    from pytlsd import lsd
+except ImportError:
+    lsd = None
+try:
+    from line_refinement import line_optim
+except ImportError:
+    line_optim = None
 
 
 class DeepLSD(BaseModel):
