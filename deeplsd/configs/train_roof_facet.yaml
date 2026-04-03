@@ -3,7 +3,7 @@ data:
     image_dir: /mnt/harddrive/data/dataset/sam2_data/train/images
     gt_dir: gt_rooflines/hdf5
     val_size: 500
-    batch_size: 4
+    batch_size: 32
     resize: [512, 512]
     num_workers: 4
     photometric_augmentation:
