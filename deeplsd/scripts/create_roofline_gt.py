@@ -132,21 +132,32 @@ def extract_rooflines_from_payload(payload_path):
                 all_segments.append([x1, y1, x2, y2])
                 all_types.append(edge_type)
 
-    return np.array(all_segments) if all_segments else np.zeros((0, 4)), all_types, original_size, image_size
+    return np.array(all_segments) if all_segments else np.zeros((0, 4)), all_types, original_size, image_size, data
 
 
-def scale_segments_to_target(segments, original_img_size, target_size=1024):
+def scale_segments_to_target(segments, image_size, original_img_size, target_size=1024):
     """
-    Scale line segments from original coordinate space to target_size x target_size.
-    original_img_size: [w, h] from the payload JSON
+    Scale line segments from payload coordinate space to target_size x target_size.
+    The point coordinates in the JSON are in imageSize space.
+    The training images are rendered from original_img_size and resized to target_size.
+    
+    image_size: [w, h] from payload "imageSize" (e.g. 800x800)
+    original_img_size: [w, h] from payload "original_img_size" (e.g. 1600x1600)
+    target_size: final image size (1024)
     """
     if len(segments) == 0:
         return segments
 
-    # The point coordinates in the JSON are in the original_img_size space
+    # Point coords are in imageSize space (800x800)
+    img_w, img_h = image_size[0], image_size[1]
+    # Training images are original_img_size rescaled to target_size
     orig_w, orig_h = original_img_size[0], original_img_size[1]
-    scale_x = target_size / orig_w
-    scale_y = target_size / orig_h
+
+    # Scale: imageSize -> original_img_size -> target_size
+    # Or if the training images were rendered at imageSize and resized to target:
+    # scale = target_size / imageSize
+    scale_x = target_size / img_w
+    scale_y = target_size / img_h
 
     scaled = segments.copy().astype(np.float64)
     scaled[:, 0] *= scale_x  # x1
@@ -238,15 +249,22 @@ def process_generate(image_dir, payload_dir, output_dir, visualize=False, max_sa
 
         try:
             # Extract rooflines
-            segments, edge_types, orig_size, img_size = \
+            segments, edge_types, orig_size, img_size, payload_data = \
                 extract_rooflines_from_payload(payload_path)
 
             if len(segments) == 0:
                 stats["empty"] += 1
                 continue
 
-            # Scale to 1024x1024
-            scaled_segments = scale_segments_to_target(segments, orig_size, 1024)
+            # Debug: print coordinate ranges for first few
+            if stats["total"] <= 5:
+                print(f"  {stem}: imageSize={img_size}, orig_size={orig_size}, "
+                      f"coord range x=[{segments[:,0].min():.0f}-{segments[:,0].max():.0f}], "
+                      f"y=[{segments[:,1].min():.0f}-{segments[:,1].max():.0f}]")
+
+            # Scale from imageSize space to 1024x1024
+            scaled_segments = scale_segments_to_target(
+                segments, img_size, orig_size, 1024)
 
             # Save line segments as .npy (Nx4 array: x1, y1, x2, y2)
             np.save(str(lines_dir / f"{stem}.npy"), scaled_segments.astype(np.float32))
