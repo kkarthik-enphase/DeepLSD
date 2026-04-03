@@ -206,7 +206,7 @@ def render_visualization(image, segments, edge_types, thickness=2):
     return vis
 
 
-def process_generate(image_dir, payload_dir, output_dir, visualize=False):
+def process_generate(image_dir, payload_dir, output_dir, visualize=False, max_samples=None):
     """Generate GT roofline data for all matched images."""
     mapping = build_mapping(image_dir, payload_dir)
 
@@ -227,7 +227,12 @@ def process_generate(image_dir, payload_dir, output_dir, visualize=False):
 
     stats = {"total": 0, "with_lines": 0, "empty": 0, "errors": 0}
 
-    for img_name, payload_path in tqdm(mapping.items(), desc="Generating GT"):
+    items = list(mapping.items())
+    if max_samples:
+        items = items[:max_samples]
+        print(f"Processing only first {max_samples} samples")
+
+    for img_name, payload_path in tqdm(items, desc="Generating GT"):
         stem = Path(img_name).stem
         stats["total"] += 1
 
@@ -323,6 +328,8 @@ def main():
                         help='Also save visualizations during generate')
     parser.add_argument('--num_samples', type=int, default=20,
                         help='Number of samples for visualize mode')
+    parser.add_argument('--max_samples', type=int, default=None,
+                        help='Max images to process in generate mode (for quick testing)')
     args = parser.parse_args()
 
     if args.mode == 'map':
@@ -336,7 +343,7 @@ def main():
     elif args.mode == 'generate':
         assert args.payload_dir, "--payload_dir required for generate mode"
         process_generate(args.image_dir, args.payload_dir,
-                        args.output_dir, args.visualize)
+                        args.output_dir, args.visualize, args.max_samples)
 
     elif args.mode == 'visualize':
         process_visualize(args.image_dir, args.output_dir, args.num_samples)
