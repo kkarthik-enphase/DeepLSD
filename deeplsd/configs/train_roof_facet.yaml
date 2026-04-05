@@ -3,9 +3,9 @@ data:
     image_dir: /mnt/harddrive/data/dataset/sam2_data/train/images
     gt_dir: gt_rooflines/hdf5
     val_size: 500
-    batch_size: 96
+    batch_size: 48
     resize: [512, 512]
-    num_workers: 4
+    num_workers: 2
     photometric_augmentation:
         enable: True
         primitives: ['random_brightness', 'random_contrast',
