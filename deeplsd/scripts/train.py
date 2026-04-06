@@ -183,6 +183,9 @@ def training(conf, output_dir, args):
             losses = loss_fn(pred, data)
             loss = torch.mean(losses['total'])
             loss.backward()
+            if hasattr(conf.train, 'clip_grad') and conf.train.clip_grad:
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), conf.train.clip_grad)
             optimizer.step()
 
             if it % conf.train.log_every_iter == 0:
